@@ -2,17 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 /**
- * DeviceCard — BUG: Not memoized
- *
- * This component re-renders on every parent render because:
- * 1. onPress is a new function reference each time (created in parent without useCallback)
- * 2. React.memo is not applied
- *
- * Fix: wrap with React.memo and a custom comparison function.
- * A naive React.memo wrapping won't help if the parent doesn't stabilize the onPress callback.
- *
- * Note: don't just memo everything — understand WHY this one needs it and what the
- * comparison function should check.
+ * DeviceCard — Memoized with custom comparison.
+ * Re-renders only when any device data used in the component changes.
  */
 
 const STATUS_CONFIG = {
@@ -20,6 +11,21 @@ const STATUS_CONFIG = {
   offline: { color: '#EF4444', label: 'Offline' },
   warning: { color: '#F59E0B', label: 'Warning' },
 };
+
+/** Device fields used in this component: id, status, lastSeen, name, type, location, battery */
+function isDeviceEqual(prev, next) {
+  if (prev === next) return true;
+  if (!prev || !next) return false;
+  return (
+    prev.id === next.id &&
+    prev.status === next.status &&
+    prev.lastSeen === next.lastSeen &&
+    prev.name === next.name &&
+    prev.type === next.type &&
+    prev.location === next.location &&
+    prev.battery === next.battery
+  );
+}
 
 function DeviceCard({ device, onPress }) {
   const status = STATUS_CONFIG[device.status] || { color: '#999', label: device.status };
@@ -68,9 +74,9 @@ function DeviceCard({ device, onPress }) {
   );
 }
 
-// Intentionally NOT exported as memo — this is the bug.
-// Fix: export default React.memo(DeviceCard, /* custom comparison */);
-export default DeviceCard;
+export default React.memo(DeviceCard, (prevProps, nextProps) =>
+  isDeviceEqual(prevProps.device, nextProps.device)
+);
 
 const styles = StyleSheet.create({
   card: {

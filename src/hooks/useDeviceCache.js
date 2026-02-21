@@ -24,31 +24,41 @@ export function useDeviceCache() {
   /**
    * Load cached devices from AsyncStorage.
    * Returns null if no cache exists or cache version is outdated.
+   * On version mismatch, clears the stale cache.
    * @returns {Promise<{ data: Device[], timestamp: number } | null>}
    */
   async function getCachedDevices() {
-    // TODO: implement
-    // 1. Load from storage using CACHE_KEY
-    // 2. Return null if missing
-    // 3. Return null if version !== CACHE_VERSION (discard stale schema)
-    // 4. Return { data, timestamp }
-    return null;
+    const payload = await getItem(CACHE_KEY);
+    if (payload == null || typeof payload !== 'object') {
+      return null;
+    }
+    if (payload.version !== CACHE_VERSION) {
+      await removeItem(CACHE_KEY);
+      return null;
+    }
+    if (!Array.isArray(payload.data) || typeof payload.timestamp !== 'number') {
+      await removeItem(CACHE_KEY);
+      return null;
+    }
+    return { data: payload.data, timestamp: payload.timestamp };
   }
 
   /**
-   * Save devices to cache with current timestamp.
+   * Save devices to cache with current timestamp and current version.
    * @param {Device[]} devices
    */
   async function setCachedDevices(devices) {
-    // TODO: implement
-    // Store: { data: devices, timestamp: Date.now(), version: CACHE_VERSION }
+    await setItem(CACHE_KEY, {
+      data: devices,
+      timestamp: Date.now(),
+      version: CACHE_VERSION,
+    });
   }
 
   /**
    * Clear the device cache.
    */
   async function clearCache() {
-    // TODO: implement
     await removeItem(CACHE_KEY);
   }
 
