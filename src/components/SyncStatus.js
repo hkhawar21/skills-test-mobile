@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
 
 /**
  * SyncStatus — skeleton
@@ -11,6 +17,7 @@ import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'rea
  *   status: 'syncing' | 'synced' | 'error' | 'offline'
  *   lastSyncedAt: number | null  (Date.now() timestamp of last successful sync)
  *   onRetry: () => void          (called when user taps error state)
+ *   isStale: boolean             (when status is error and cache >1h old, show "Data may be outdated")
  *
  * States to display:
  *   syncing  → "Syncing..." with activity indicator
@@ -22,45 +29,109 @@ import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'rea
  * Don't cause layout shift when transitioning between states.
  */
 
-export default function SyncStatus({ status, lastSyncedAt, onRetry }) {
-  // TODO: implement relative time tracking (update every 30s)
-  // TODO: implement status-based rendering
-  // TODO: implement offline detection (use @react-native-community/netinfo)
+const RELATIVE_TIME_INTERVAL_MS = 30000;
 
-  // Placeholder — replace with real implementation
+function getRelativeTime(timestamp) {
+  if (timestamp == null || typeof timestamp !== "number") return null;
+  const diffMs = Date.now() - timestamp;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  const hours = Math.floor(diffMins / 60);
+  return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+}
+
+export default function SyncStatus({ status, lastSyncedAt, onRetry, isStale }) {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (lastSyncedAt == null || status !== "synced") return;
+    const id = setInterval(
+      () => setTick((t) => t + 1),
+      RELATIVE_TIME_INTERVAL_MS,
+    );
+    return () => clearInterval(id);
+  }, [lastSyncedAt, status]);
+
+  const relativeTime = getRelativeTime(lastSyncedAt);
+  const syncedLabel = relativeTime
+    ? `Updated ${relativeTime}`
+    : "Updated just now";
+
   return (
     <View style={styles.container}>
-      <Text style={styles.placeholder}>
-        SyncStatus: {status} — implement me
-      </Text>
+      {status === "syncing" && (
+        <>
+          <ActivityIndicator
+            size="small"
+            color="#0066CC"
+            style={styles.indicator}
+          />
+          <Text style={styles.text} adjustsFontSizeToFit numberOfLines={1}>
+            Syncing...
+          </Text>
+        </>
+      )}
+      {status === "synced" && (
+        <Text style={styles.text} adjustsFontSizeToFit numberOfLines={1}>
+          {syncedLabel}
+        </Text>
+      )}
+      {status === "error" && (
+        <TouchableOpacity
+          onPress={onRetry}
+          activeOpacity={0.7}
+          style={styles.touchable}
+        >
+          <View style={styles.errorContent}>
+            <Text style={styles.text} adjustsFontSizeToFit numberOfLines={1}>
+              Sync failed — tap to retry
+            </Text>
+            {isStale && (
+              <Text style={styles.staleNote} numberOfLines={1}>
+                Data may be outdated
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      )}
+      {status === "offline" && (
+        <Text adjustsFontSizeToFit numberOfLines={1} style={styles.text}>
+          Offline — showing cached data
+        </Text>
+      )}
     </View>
   );
 }
 
-function getRelativeTime(timestamp) {
-  // TODO: implement
-  // Returns a string like "just now", "3 min ago", "2 hours ago"
-  if (!timestamp) return null;
-  const diffMs = Date.now() - timestamp;
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins} min ago`;
-  return `${Math.floor(diffMins / 60)} hour${Math.floor(diffMins / 60) !== 1 ? 's' : ''} ago`;
-}
-
 const styles = StyleSheet.create({
   container: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: "#F0F0F0",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#DDD',
+    borderBottomColor: "#DDD",
     minHeight: 36,
-    justifyContent: 'center',
   },
-  placeholder: {
+  indicator: {
+    marginRight: 8,
+  },
+  text: {
     fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
+    color: "#666",
+  },
+  touchable: {
+    flex: 1,
+  },
+  errorContent: {
+    flex: 1,
+  },
+  staleNote: {
+    fontSize: 11,
+    color: "#999",
+    marginTop: 2,
+    fontStyle: "italic",
   },
 });
