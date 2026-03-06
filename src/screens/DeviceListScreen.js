@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback } from 'react';
 import {
   View,
   FlatList,
@@ -6,80 +6,64 @@ import {
   RefreshControl,
   ActivityIndicator,
   Text,
-} from "react-native";
-import { useDevices } from "../hooks/useDevices";
-import DeviceCard from "../components/DeviceCard";
-import EmptyState from "../components/EmptyState";
-import ErrorBanner from "../components/ErrorBanner";
-import SyncStatus from "../components/SyncStatus";
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useDevices } from '../hooks/useDevices';
+import DeviceCard from '../components/DeviceCard';
+import EmptyState from '../components/EmptyState';
+import ErrorBanner from '../components/ErrorBanner';
+import SyncStatus from '../components/SyncStatus';
 
 /**
  * DeviceListScreen
  *
- * Fetches devices on mount (via useDevices), then auto-fetches every 30 seconds.
- * Manual pull-to-refresh resets the 30-second window (next auto-fetch 30s after refresh).
+ * BUGS in this file:
+ *
+ * Bug 1 — Excessive re-renders:
+ *   - useFocusEffect triggers fetchDevices on every focus event (no throttle)
+ *   - onPress callback is recreated on every render (no useCallback)
+ *   - Combined with unmemoized DeviceCard, this causes full list re-renders on tab switch
+ *
+ * Bug 2 — Pull-to-refresh stale state:
+ *   - handleRefresh calls fetchDevices() but doesn't await it correctly
+ *   - refreshing is set to false immediately, before fetch completes
+ *   - List doesn't update after pull-to-refresh
  *
  * See BRIEF.md for full spec.
  */
-const AUTO_FETCH_INTERVAL_MS = 30000;
-
 export default function DeviceListScreen({ navigation }) {
-  const { devices, isLoading, syncStatus, lastSyncedAt, error, isStaleCacheOnError, fetchDevices } = useDevices();
+  const { devices, isLoading, error, fetchDevices } = useDevices();
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchDevicesRef = useRef(fetchDevices);
-  fetchDevicesRef.current = fetchDevices;
+  // BUG: This runs fetchDevices on EVERY focus event — tab switches, back navigation, etc.
+  // No throttle, no tracking of when we last fetched.
+  // Fix: track lastFetchedAt, skip if < 30 seconds ago.
+  useFocusEffect(
+    useCallback(() => {
+      fetchDevices();
+    }, [fetchDevices])
+  );
 
-  const lastFetchedAtRef = useRef(Date.now());
-  const timeoutRef = useRef(null);
-  const resetTimerRef = useRef(null);
-
-  useEffect(() => {
-    const scheduleNextFetch = () => {
-      const delay = Math.max(
-        0,
-        lastFetchedAtRef.current + AUTO_FETCH_INTERVAL_MS - Date.now(),
-      );
-      timeoutRef.current = setTimeout(async () => {
-        await fetchDevicesRef.current?.();
-        lastFetchedAtRef.current = Date.now();
-        scheduleNextFetch();
-      }, delay);
-    };
-
-    resetTimerRef.current = () => {
-      lastFetchedAtRef.current = Date.now();
-      if (timeoutRef.current != null) clearTimeout(timeoutRef.current);
-      scheduleNextFetch();
-    };
-
-    scheduleNextFetch();
-
-    return () => {
-      if (timeoutRef.current != null) clearTimeout(timeoutRef.current);
-      resetTimerRef.current = null;
-    };
-  }, []);
-
-  const handleRefresh = async () => {
+  // BUG: This doesn't work.
+  // fetchDevices() is called but not awaited — setRefreshing(false) runs immediately.
+  // The list state updates from fetchDevices don't arrive until after refreshing is already false.
+  const handleRefresh = () => {
     setRefreshing(true);
-    const devices = await fetchDevices();
-    // We can use this devices variable to update the state
-    // This devices variable contains the updated devices list in the same render cycle
-    resetTimerRef.current?.();
+    fetchDevices(); // ← should be awaited, and should force-bypass throttle
     setRefreshing(false);
   };
 
-  const handleDevicePress = useCallback(
-    (device) => {
-      navigation.navigate("DeviceDetail", { deviceId: device.id });
-    },
-    [navigation],
-  );
+  // BUG: This callback is recreated on every render.
+  // Every DeviceCard receives a new onPress reference, causing unnecessary re-renders.
+  const handleDevicePress = (device) => {
+    navigation.navigate('DeviceDetail', { deviceId: device.id });
+  };
 
-  const renderItem = useCallback(
-    ({ item }) => <DeviceCard device={item} onPress={handleDevicePress} />,
-    [handleDevicePress],
+  const renderItem = ({ item }) => (
+    <DeviceCard
+      device={item}
+      onPress={handleDevicePress}
+    />
   );
 
   const keyExtractor = (item) => item.id;
@@ -93,42 +77,32 @@ export default function DeviceListScreen({ navigation }) {
     );
   }
 
-  const showEmptyOffline = syncStatus === "offline" && devices.length === 0;
-
   return (
     <View style={styles.container}>
-      {error && <ErrorBanner message={error} onRetry={fetchDevices} />}
+      {error && (
+        <ErrorBanner message={error} onRetry={fetchDevices} />
+      )}
 
-      <SyncStatus
-        status={syncStatus}
-        lastSyncedAt={lastSyncedAt}
-        onRetry={fetchDevices}
-        isStale={isStaleCacheOnError}
-      />
+      {/* SyncStatus component — wire this up as part of the offline-first feature */}
+      {/* <SyncStatus status="syncing" lastSyncedAt={null} onRetry={fetchDevices} /> */}
 
-      {showEmptyOffline ? (
-        <View style={styles.emptyContainer}>
-          <EmptyState message="You're offline and there's no cached data" />
-        </View>
-      ) : (
       <FlatList
         data={devices}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        contentContainerStyle={
-          devices.length === 0 ? styles.emptyContainer : styles.listContent
+        contentContainerStyle={devices.length === 0 ? styles.emptyContainer : styles.listContent}
+        ListEmptyComponent={
+          <EmptyState message="No devices found" />
         }
-        ListEmptyComponent={<EmptyState message="No devices found" />}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={["#0066CC"]}
+            colors={['#0066CC']}
             tintColor="#0066CC"
           />
         }
       />
-      )}
     </View>
   );
 }
@@ -136,17 +110,17 @@ export default function DeviceListScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: '#F5F5F5',
   },
   centered: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
   },
   loadingText: {
     fontSize: 16,
-    color: "#666",
+    color: '#666',
   },
   listContent: {
     padding: 16,
@@ -154,7 +128,7 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

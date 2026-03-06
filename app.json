@@ -11,8 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0066CC"
     },
-    "assetBundlePatterns": ["**/*"],
-    "newArchEnabled": false,
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.example.devicemanager"
