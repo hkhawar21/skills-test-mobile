@@ -30,4 +30,4 @@ Solution to Feature: Offline-First Device List
 - **Loading behaviour:** With cache: list is shown immediately and “Syncing…” appears while a background fetch runs; no full-screen loader. Without cache (first launch): full-screen “Loading devices…” until the first fetch completes. Empty cache plus offline shows an empty state: “You're offline and there's no cached data.”
 - **SyncStatus layout:** `adjustsFontSizeToFit` and `numberOfLines={1}` are used on the status text so the bar keeps a consistent height across devices and font sizes while keeping the label visible.
 
-Total time spent on all the tasks is 90 minutes approximately. The implementation was done with the help of Curosr. Default AI Agents were used in planning, implementation and execution of the tasks. AI Agent was enough to fulfil this once understanding of the tasks and codebase was achieved, the exacts steps were described to Cursor Agent which then carried out the task. Each code change and plan was thoroughly reviewed if it matches what I had in mind and then the changes were preserved otherwise discarded.
+Total time spent on all the tasks is 90 minutes approximately.
